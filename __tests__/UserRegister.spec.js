@@ -2,14 +2,43 @@ const request = require('supertest');
 const app = require('../src/app');
 const User = require('../src/user/User');
 const sequelize = require('../src/config/database');
-const nodemailerStub = require('nodemailer-stub');
+const SMTPServer = require('smtp-server').SMTPServer;
 
-beforeAll(() => {
-  return sequelize.sync();
+let lastMail, server;
+let simulateSmtpFailure = false;
+
+beforeAll(async () => {
+  server = new SMTPServer({
+    authOptional: true,
+    onData(stream, session, callback) {
+      let mailBody;
+      stream.on('data', (data) => {
+        mailBody += data.toString();
+      });
+      stream.on('end', () => {
+        if (simulateSmtpFailure) {
+          const err = new Error('Invalid mailbox');
+          err.responseCode = 553;
+          return callback(err);
+        }
+        lastMail = mailBody;
+        callback();
+      });
+    },
+  });
+
+  await server.listen(8587, 'localhost');
+
+  await sequelize.sync();
 });
 
 beforeEach(() => {
+  simulateSmtpFailure = false;
   return User.destroy({ truncate: true });
+});
+
+afterAll(async () => {
+  await server.close();
 });
 
 const validUser = {
@@ -190,11 +219,29 @@ describe('User Registration', () => {
 
   it('sends an Account activation email with activationToken', async () => {
     await postUser();
-    const lastMail = nodemailerStub.interactsWithMail.lastMail();
-    expect(lastMail.to[0]).toBe('user1@mail.com');
     const users = await User.findAll();
     const savedUser = users[0];
-    expect(lastMail.content).toContain(savedUser.activationToken);
+    expect(lastMail).toContain('user1@mail.com');
+    expect(lastMail).toContain(savedUser.activationToken);
+  });
+
+  it('returns 502 Bad Gateway when sending email fails', async () => {
+    simulateSmtpFailure = true;
+    const response = await postUser();
+    expect(response.status).toBe(502);
+  });
+
+  it('returns Email failure message when sending email fails', async () => {
+    simulateSmtpFailure = true;
+    const response = await postUser();
+    expect(response.body.message).toBe('E-mail Failure');
+  });
+
+  it('does not save user to db if activation email fails', async () => {
+    simulateSmtpFailure = true;
+    await postUser();
+    const users = await User.findAll();
+    expect(users.length).toBe(0);
   });
 });
 
@@ -208,6 +255,7 @@ describe('Internationalization', () => {
   const password_pattern = '비밀번호는 적어도 하나씩의 대,소문자 그리고 숫자를 가져야 합니다';
   const email_inuse = '이미 사용중인 이메일입니다';
   const user_create_success = '유저 생성에 성공했습니다';
+  const email_failure = '이메일 전송이 실패했습니다';
 
   it.each`
     field         | value              | expectedMessage
@@ -251,5 +299,11 @@ describe('Internationalization', () => {
     const response = await postUser({ ...validUser }, { language: 'kr' });
 
     expect(response.body.message).toBe(user_create_success);
+  });
+
+  it(`returns ${email_failure} message when sending email fails and language is set as Korean`, async () => {
+    simulateSmtpFailure = true;
+    const response = await postUser({ ...validUser }, { language: 'kr' });
+    expect(response.body.message).toBe(email_failure);
   });
 });
