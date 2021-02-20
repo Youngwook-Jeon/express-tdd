@@ -8,5 +8,7 @@
     "password_pattern": "비밀번호는 적어도 하나씩의 대,소문자 그리고 숫자를 가져야 합니다",
     "email_inuse": "이미 사용중인 이메일입니다",
     "user_create_success": "유저 생성에 성공했습니다",
-    "email_failure": "이메일 전송이 실패했습니다"
+    "email_failure": "이메일 전송이 실패했습니다",
+    "account_activation_failure": "이 계정은 활성화되었거나 토큰이 유효하지 않습니다",
+    "account_activation_success": "활성화된 계정입니다"
 }
