@@ -10,5 +10,6 @@
     "user_create_success": "유저 생성에 성공했습니다",
     "email_failure": "이메일 전송이 실패했습니다",
     "account_activation_failure": "이 계정은 활성화되었거나 토큰이 유효하지 않습니다",
-    "account_activation_success": "활성화된 계정입니다"
+    "account_activation_success": "활성화된 계정입니다",
+    "validation_failure": "사용자 인증에 실패했습니다"
 }
